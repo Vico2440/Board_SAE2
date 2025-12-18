@@ -240,6 +240,17 @@ return_code pick_piece(board game, player current_player, int line, int column) 
 bool is_move_possible(board game, direction dir) {
     if (!game->is_picked) return false;
 
+    // --- CORRECTION REBOND ---
+    // Si on a 0 mouvements, on ne peut bouger QUE si on est en train de rebondir
+    // (c'est-à-dire qu'on est actuellement "posé" sur une case non vide)
+    bool is_bouncing = (game->moves_remaining == 0 && 
+                        game->grid[game->picked_line][game->picked_col] != NONE);
+
+    if (game->moves_remaining == 0 && !is_bouncing) {
+        return false; 
+    }
+    // -------------------------
+
     int next_l = game->picked_line;
     int next_c = game->picked_col;
 
@@ -255,32 +266,37 @@ bool is_move_possible(board game, direction dir) {
         default: return false;
     }
 
-    // 1. Check Limites STRICTES
     if (!is_valid_coord(next_l, next_c)) return false;
 
-    // 2. Check Cases Occupées
-    // Si la case est vide : OK
+    // Logique de destination
+    // 1. Destination vide : TOUJOURS OK
     if (game->grid[next_l][next_c] == NONE) {
         return true;
     }
     
-    // Si la case est occupée : 
-    // Possible SEULEMENT si c'est le tout dernier pas (pour rebondir)
-    if (game->moves_remaining == 1) {
+    // 2. Destination occupée :
+    // Possible SEULEMENT si c'est le dernier pas du mouvement actuel.
+    // Si on est en train de rebondir (moves=0), on vient de récupérer la taille du dessous.
+    // Donc on regarde la taille "virtuelle" qu'on va avoir.
+    
+    int moves_check = game->moves_remaining;
+    if (is_bouncing) {
+        // Si on rebondit, on va récupérer les points de la pièce du dessous
+        moves_check = (int)game->grid[game->picked_line][game->picked_col];
+    }
+
+    if (moves_check == 1) {
         return true;
     }
 
-    // Sinon bloqué
     return false;
 }
 
 return_code move_piece(board game, direction dir) {
     if (!game->is_picked) return EMPTY;
     
-    // On vérifie d'abord si le mouvement est légal
     if (!is_move_possible(game, dir)) return FORBIDDEN;
 
-    // Gestion du GOAL (Victoire)
     if (dir == GOAL) {
         game->winner = game->current_player;
         game->is_picked = false;
@@ -288,54 +304,59 @@ return_code move_piece(board game, direction dir) {
         return OK;
     }
 
-    // Calcul coordonnées
+    // --- GESTION DU REBOND (Démarrage) ---
+    // Si on est à 0 et sur une pièce, c'est qu'on valide le rebond maintenant.
+    if (game->moves_remaining == 0 && game->grid[game->picked_line][game->picked_col] != NONE) {
+        size size_under = game->grid[game->picked_line][game->picked_col];
+        game->moves_remaining = (int)size_under; // On recharge !
+    }
+    // -------------------------------------
+
     int next_l = game->picked_line;
     int next_c = game->picked_col;
+
     switch (dir) {
         case NORTH: next_l++; break;
         case SOUTH: next_l--; break;
         case EAST:  next_c++; break;
         case WEST:  next_c--; break;
-        default: return PARAM;
+        default: return PARAM; // Should not happen checked by is_move
     }
 
     // Sauvegarde Historique
     game->history[game->history_count].line = game->picked_line;
     game->history[game->history_count].col = game->picked_col;
-    game->history[game->history_count].moves_left = game->moves_remaining;
+    game->history[game->history_count].moves_left = game->moves_remaining; 
+    // Note: on sauvegarde le moves_left "rechargé" si c'était un rebond, 
+    // comme ça le Undo reviendra au début du rebond avec les points max.
     game->history_count++;
 
-    // Mise à jour position
+    // Mouvement
     game->picked_line = next_l;
     game->picked_col = next_c;
-    game->moves_remaining--; // On décrémente
+    game->moves_remaining--; 
 
-    // --- C'est ici que la magie opère (Correction des bugs) ---
-
-    // Cas 1 : On atterrit sur une case VIDE
+    // --- ATTERRISSAGE ---
+    
+    // Si on arrive sur une case VIDE
     if (game->grid[next_l][next_c] == NONE) {
         if (game->moves_remaining == 0) {
-            // FIN DU MOUVEMENT !
-            // On pose la pièce définitivement
+            // Fin du tour normale
             game->grid[next_l][next_c] = game->picked_size;
-            
-            // On n'a plus rien en main
             game->is_picked = false;
             game->current_player = NO_PLAYER;
             game->picked_size = NONE;
-            game->history_count = 0; // Reset history pour tour suivant
+            game->history_count = 0;
         }
-        // Sinon (moves > 0), on continue de "voler" (is_picked reste true)
+        // Sinon, on continue de voler
     } 
-    // Cas 2 : On atterrit sur une case OCCUPÉE (Rebond)
+    // Si on arrive sur une case OCCUPÉE
     else {
-        // Normalement moves_remaining == 0 ici car is_move_possible l'a vérifié
-        // On récupère la taille du dessous pour le rebond
-        size size_under = game->grid[next_l][next_c];
-        game->moves_remaining = (int)size_under;
-        
-        // IMPORTANT : is_picked reste TRUE.
-        // Le main va détecter moves > 0 ou l'état de rebond et proposer le choix.
+        // On ne fait RIEN de spécial ici.
+        // moves_remaining est tombé à 0 (garanti par is_move_possible).
+        // On reste "is_picked = true".
+        // Le main va détecter moves=0, voir qu'on est picked, et afficher le menu Swap/Rebond.
+        // Au prochain appel (Rebond), le bloc "GESTION DU REBOND" au début de cette fonction s'activera.
     }
 
     return OK;
