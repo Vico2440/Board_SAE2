@@ -156,6 +156,8 @@ int picked_piece_column(board game) {
 
 int movement_left(board game) {
     if (game->picked_piece == NONE) return -1;
+    // Retourne le nombre de mouvements. 
+    // Si c'est 0 et qu'on est sur une pièce, le main déclenchera le menu Swap/Rebond.
     return game->moves_remaining;
 }
 
@@ -229,13 +231,13 @@ bool is_move_possible(board game, direction direction) {
     int target_l = game->p_line;
     int target_c = game->p_col;
 
+    // Application de la direction
     switch(direction) {
         case NORTH: target_l++; break;
         case SOUTH: target_l--; break;
         case EAST:  target_c++; break;
         case WEST:  target_c--; break;
         case GOAL:
-            // Règle GOAL : NORD doit aller au Sud (ligne < 0), SUD doit aller au Nord (ligne >= DIMENSION)
             if (game->current_player == SOUTH_P && game->p_line == DIMENSION - 1) return true;
             if (game->current_player == NORTH_P && game->p_line == 0) return true;
             return false;
@@ -244,8 +246,18 @@ bool is_move_possible(board game, direction direction) {
     // Vérif hors plateau
     if (!is_inside(target_l, target_c)) return false;
 
-    // Règle Case occupée :
-    // On ne peut aller sur une case occupée QUE si c'est le DERNIER mouvement (moves == 1)
+    // --- CORRECTION ICI ---
+    // Cas spécial : REBOND
+    // Si moves == 0 ET qu'on est sur une pièce, on a le droit de bouger (c'est le rebond)
+    if (game->moves_remaining == 0 && game->grid[game->p_line][game->p_col] != NONE) {
+        // Pour le rebond, la case cible DOIT être vide (sauf si c'est la fin du rebond, mais simplifions)
+        // La règle dit "toward an empty square" pour les pas intermédiaires.
+        if (game->grid[target_l][target_c] != NONE) return false;
+        return true;
+    }
+
+    // Cas normal
+    // On ne peut aller sur une case occupée QUE si c'est le DERNIER mouvement
     if (game->grid[target_l][target_c] != NONE) {
         if (game->moves_remaining != 1) return false;
     }
@@ -254,19 +266,18 @@ bool is_move_possible(board game, direction direction) {
 }
 
 return_code move_piece(board game, direction direction) {
-    // 1. Vérif validité
     if (game->picked_piece == NONE) return EMPTY;
     if (!is_move_possible(game, direction)) return FORBIDDEN;
 
-    // 2. Gestion du BUT (Victoire immédiate)
+    // Gestion du BUT
     if (direction == GOAL) {
         game->winner = game->current_player;
-        game->picked_piece = NONE; // La pièce sort du jeu
+        game->picked_piece = NONE;
         game->moves_remaining = 0;
         return OK;
     }
 
-    // 3. Calcul coordonnées
+    // Calcul coordonnées futures
     int new_l = game->p_line;
     int new_c = game->p_col;
     if (direction == NORTH) new_l++;
@@ -274,38 +285,40 @@ return_code move_piece(board game, direction direction) {
     if (direction == EAST)  new_c++;
     if (direction == WEST)  new_c--;
 
-    // 4. Sauvegarde dans l'historique (pour Cancel Step)
+    // Sauvegarde Historique (inchangé)
     game->history[game->history_index].old_line = game->p_line;
     game->history[game->history_index].old_col = game->p_col;
     game->history[game->history_index].moves_at_step = game->moves_remaining;
     game->history_index++;
 
-    // 5. Gestion du Rebond (si la case est occupée)
-    if (game->grid[new_l][new_c] != NONE) {
-        // On arrive sur une pièce. 
-        // On récupère sa taille pour les mouvements suivants
-        size piece_under = game->grid[new_l][new_c];
-        
-        // On consomme le mouvement actuel (-1) et on ajoute le rebond (+taille)
-        game->moves_remaining = (game->moves_remaining - 1) + piece_under;
-        
-        // On déplace la pièce "en main" au dessus de l'autre
-        game->p_line = new_l;
-        game->p_col = new_c;
-        
-        // La pièce en dessous reste là (dans grid), la notre reste "picked" (flottante)
-    } 
-    else {
-        // Mouvement simple vers case vide
-        game->p_line = new_l;
-        game->p_col = new_c;
-        game->moves_remaining--;
+    // --- LOGIQUE DE REBOND CORRIGÉE ---
+    
+    // CAS 1 : On démarre un rebond (On était à 0 sur une pièce et le joueur a choisi 'r')
+    if (game->moves_remaining == 0 && game->grid[game->p_line][game->p_col] != NONE) {
+        // On récupère la taille de la pièce sous nos pieds
+        int bounce_size = game->grid[game->p_line][game->p_col];
+        // On crédite les points (la taille de la pièce dessous)
+        game->moves_remaining = bounce_size;
+    }
 
-        // Si c'était le dernier mouvement, on pose la pièce !
+    // On effectue le mouvement
+    game->p_line = new_l;
+    game->p_col = new_c;
+    game->moves_remaining--; // On consomme 1 point pour ce pas
+
+    // CAS 2 : On atterrit sur une pièce (fin de mouvement normal)
+    if (game->grid[new_l][new_c] != NONE) {
+        // La règle dit qu'on ne peut arriver sur une pièce qu'au dernier pas.
+        // Donc ici moves_remaining vaut forcément 0.
+        // On ne fait rien de spécial, on laisse moves_remaining à 0.
+        // C'est ce 0 qui dira au main : "Hey, demande au joueur s'il veut Swap ou Rebondir".
+    }
+    else {
+        // CAS 3 : On atterrit sur une case vide et on a fini (moves == 0)
         if (game->moves_remaining == 0) {
+            // On pose la pièce définitivement
             game->grid[new_l][new_c] = game->picked_piece;
-            game->picked_piece = NONE; // On ne l'a plus en main
-            // Le tour est fini
+            game->picked_piece = NONE;
         }
     }
 
