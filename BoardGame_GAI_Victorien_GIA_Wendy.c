@@ -35,8 +35,13 @@ player turn_manager(player lastPlayer, char *name_n, char *name_s)
 /// @param game plateau à display
 void display_board(board game, char *name_n, char *name_s)
 {
-    size piece;
+    // --- MODIFICATION ICI ---
+    // \x1b[H  : Déplace le curseur en haut à gauche (Home)
+    // \x1b[2J : Efface tout l'écran (Clear Screen)
+    printf("\x1b[H\x1b[2J");
+    // ------------------------
 
+    size piece;
 
     printf("\n");
     printf("         NORD : \x1b[34m%s\x1b[0m       \n", name_n);
@@ -99,7 +104,7 @@ void display_board(board game, char *name_n, char *name_s)
     printf("  \\\\  \\\\  \\\\ //  //  //\n");
     
     printf("         SUD : \x1b[31m%s\x1b[0m       \n", name_s);
-	printf("__________________________________________________ \n");
+    printf("__________________________________________________ \n");
 }
 
 /// @brief reçoie le resultat de pile ou face
