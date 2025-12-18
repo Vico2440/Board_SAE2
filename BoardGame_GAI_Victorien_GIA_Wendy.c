@@ -21,6 +21,10 @@ typedef enum {
 /// @brief Fonction qui permet d'alterner entre Joueur NORD ET SUD 
 player turn_manager(player lastPlayer, char *name_n, char *name_s)
 {
+    // Correction Warning : On dit au compilateur "on sait qu'ils sont inutilisés ici, c'est fait exprès"
+    (void)name_n;
+    (void)name_s;
+
     if (lastPlayer == SOUTH_P) return NORTH_P;
     else return SOUTH_P;
 }
@@ -259,6 +263,9 @@ GameState state_setup(board game, player current_player, char *name_n, char *nam
 
 GameState state_turn_start(board game, player *current_player, char *name_n, char *name_s)
 {
+    // Correction Warning : paramètre 'game' inutilisé
+    (void)game; 
+    
     *current_player = turn_manager(*current_player, name_n, name_s);
     return STATE_PLAYER_TURN;
 }
@@ -343,6 +350,7 @@ GameState state_player_turn(board game, player *current_player, char *name_n, ch
         if (cmd == 'N' || cmd == 'S' || cmd == 'E' || cmd == 'O') {
             dir = (cmd == 'N') ? NORTH : (cmd == 'S') ? SOUTH : (cmd == 'E') ? EAST : WEST;
 
+            // Logique de rebond / swap si moves == 0
             if (moves == 0) {
                 char choix;
                 printf("Bloqué ! [r]ebond ou [s]wap ? : ");
@@ -359,6 +367,7 @@ GameState state_player_turn(board game, player *current_player, char *name_n, ch
                     }
                     continue; 
                 }
+                // Si 'r' (rebond), on continue et move_piece rechargera les mouvements
             }
 
             if (is_move_possible(game, dir)) {
@@ -406,7 +415,8 @@ GameState state_end_turn(board game, player *current_player, char *name_n, char 
     return STATE_TURN_START;
 }
 
-int main(int args, char **argv)
+// Correction Warning : 'void' car pas d'arguments utilisés
+int main(void)
 {
     printf("\x1b[H\x1b[2J"); 
 
@@ -428,6 +438,9 @@ int main(int args, char **argv)
             case STATE_TURN_START: state = state_turn_start(game, &p, name_n, name_s); break;
             case STATE_PLAYER_TURN:state = state_player_turn(game, &p, name_n, name_s); break;
             case STATE_END_TURN:   state = state_end_turn(game, &p, name_n, name_s); break;
+            
+            // Correction Warning : On gère le cas GAME_OVER (même si on n'y entre pas via le while)
+            case STATE_GAME_OVER:  break;
         }
     }
     destroy_game(game);

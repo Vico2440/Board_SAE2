@@ -9,7 +9,7 @@
  * \author Gemini AI (based on spec by Paul Dorbec)
  */
 
-// Structure interne pour sauvegarder l'historique d'un tour (pour cancel_step)
+// Structure interne pour l'historique (Undo)
 typedef struct {
     int line;
     int col;
@@ -20,24 +20,20 @@ typedef struct {
  * @brief The board of the game.
  */
 struct board_s {
-    size grid[DIMENSION][DIMENSION]; // Grille du jeu
-    int placed_pieces[NB_PLAYERS + 1][NB_SIZE + 1]; // Compteur pour le setup
+    size grid[DIMENSION][DIMENSION];
+    int placed_pieces[NB_PLAYERS + 1][NB_SIZE + 1];
 
-    // État du tour courant
     player current_player;      
     bool is_picked;             
     
-    // Information sur la pièce "en main"
     size picked_size;           
     int picked_line;            
     int picked_col;             
     int moves_remaining;        
     
-    // Pour cancel_movement
     int origin_line;            
     int origin_col;
 
-    // Pour cancel_step (Undo)
     move_step history[50];      
     int history_count;          
 
@@ -50,8 +46,6 @@ static bool is_valid_coord(int line, int col) {
     return (line >= 0 && line < DIMENSION && col >= 0 && col < DIMENSION);
 }
 
-// Vérifie si une pièce à (line, col) a au moins un mouvement valide
-// Utile pour southmost/northmost
 static bool piece_can_move(board game, int line, int col, player p) {
     size s = game->grid[line][col];
     if (s == NONE) return false;
@@ -59,20 +53,16 @@ static bool piece_can_move(board game, int line, int col, player p) {
     int dl[] = {1, -1, 0, 0};
     int dc[] = {0, 0, 1, -1};
 
-    // Vérifie les 4 directions
     for (int i = 0; i < 4; i++) {
         int nl = line + dl[i];
         int nc = col + dc[i];
 
         if (is_valid_coord(nl, nc)) {
-            // Libre ? OK.
             if (game->grid[nl][nc] == NONE) return true;
-            // Occupé ? OK seulement si taille 1 (car rebond direct)
             if (game->grid[nl][nc] != NONE && s == ONE) return true;
         }
     }
 
-    // Cas spécial GOAL
     if (p == SOUTH_P && line == DIMENSION - 1) return true;
     if (p == NORTH_P && line == 0) return true;
 
@@ -120,10 +110,6 @@ void destroy_game(board game) {
 
 size get_piece_size(board game, int line, int column) {
     if (!is_valid_coord(line, column)) return NONE;
-    // Si la case demandée est celle où se trouve virtuellement la pièce en main,
-    // on renvoie NONE car la pièce est "en l'air", pas sur la grille.
-    // (Sauf si c'est pour l'affichage, mais l'affichage gère ça).
-    // Note: Dans cette implémentation, quand on pick, on met grid à NONE.
     return game->grid[line][column];
 }
 
@@ -156,7 +142,7 @@ int northmost_occupied_line(board game) {
 }
 
 player picked_piece_owner(board game) {
-    if (!game->is_picked) return NO_PLAYER; // Important pour arrêter la boucle du main
+    if (!game->is_picked) return NO_PLAYER;
     return game->current_player;
 }
 
@@ -212,7 +198,6 @@ return_code pick_piece(board game, player current_player, int line, int column) 
     if (!is_valid_coord(line, column)) return PARAM;
     if (game->grid[line][column] == NONE) return EMPTY;
 
-    // Vérification de la ligne valide (closest row rule)
     if (current_player == SOUTH_P) {
         if (line != southmost_occupied_line(game)) return FORBIDDEN;
     } else if (current_player == NORTH_P) {
@@ -232,7 +217,7 @@ return_code pick_piece(board game, player current_player, int line, int column) 
     game->origin_col = column;
     game->history_count = 0;
 
-    game->grid[line][column] = NONE; // On retire la pièce du plateau
+    game->grid[line][column] = NONE; 
 
     return OK;
 }
@@ -240,16 +225,13 @@ return_code pick_piece(board game, player current_player, int line, int column) 
 bool is_move_possible(board game, direction dir) {
     if (!game->is_picked) return false;
 
-    // --- CORRECTION REBOND ---
-    // Si on a 0 mouvements, on ne peut bouger QUE si on est en train de rebondir
-    // (c'est-à-dire qu'on est actuellement "posé" sur une case non vide)
+    // --- REBOND ---
     bool is_bouncing = (game->moves_remaining == 0 && 
                         game->grid[game->picked_line][game->picked_col] != NONE);
 
     if (game->moves_remaining == 0 && !is_bouncing) {
         return false; 
     }
-    // -------------------------
 
     int next_l = game->picked_line;
     int next_c = game->picked_col;
@@ -268,20 +250,12 @@ bool is_move_possible(board game, direction dir) {
 
     if (!is_valid_coord(next_l, next_c)) return false;
 
-    // Logique de destination
-    // 1. Destination vide : TOUJOURS OK
     if (game->grid[next_l][next_c] == NONE) {
         return true;
     }
     
-    // 2. Destination occupée :
-    // Possible SEULEMENT si c'est le dernier pas du mouvement actuel.
-    // Si on est en train de rebondir (moves=0), on vient de récupérer la taille du dessous.
-    // Donc on regarde la taille "virtuelle" qu'on va avoir.
-    
     int moves_check = game->moves_remaining;
     if (is_bouncing) {
-        // Si on rebondit, on va récupérer les points de la pièce du dessous
         moves_check = (int)game->grid[game->picked_line][game->picked_col];
     }
 
@@ -304,13 +278,20 @@ return_code move_piece(board game, direction dir) {
         return OK;
     }
 
-    // --- GESTION DU REBOND (Démarrage) ---
-    // Si on est à 0 et sur une pièce, c'est qu'on valide le rebond maintenant.
+    // --- GESTION DU REBOND (MODIFIÉ) ---
+    // Si on a 0 mouvement et qu'on est sur une pièce :
+    // On RECHARGE, mais on ne BOUGE PAS.
+    // "La pièce reste et je récupère les mouvements"
     if (game->moves_remaining == 0 && game->grid[game->picked_line][game->picked_col] != NONE) {
         size size_under = game->grid[game->picked_line][game->picked_col];
-        game->moves_remaining = (int)size_under; // On recharge !
+        game->moves_remaining = (int)size_under;
+        
+        // On retourne OK tout de suite. Le mouvement n'est PAS effectué.
+        // La boucle de jeu va se relancer, afficher le nouveau nombre de mouvements,
+        // et le joueur pourra choisir sa direction.
+        return OK; 
     }
-    // -------------------------------------
+    // -----------------------------------
 
     int next_l = game->picked_line;
     int next_c = game->picked_col;
@@ -320,44 +301,31 @@ return_code move_piece(board game, direction dir) {
         case SOUTH: next_l--; break;
         case EAST:  next_c++; break;
         case WEST:  next_c--; break;
-        default: return PARAM; // Should not happen checked by is_move
+        default: return PARAM;
     }
 
-    // Sauvegarde Historique
     game->history[game->history_count].line = game->picked_line;
     game->history[game->history_count].col = game->picked_col;
-    game->history[game->history_count].moves_left = game->moves_remaining; 
-    // Note: on sauvegarde le moves_left "rechargé" si c'était un rebond, 
-    // comme ça le Undo reviendra au début du rebond avec les points max.
+    game->history[game->history_count].moves_left = game->moves_remaining;
     game->history_count++;
 
-    // Mouvement
     game->picked_line = next_l;
     game->picked_col = next_c;
     game->moves_remaining--; 
 
-    // --- ATTERRISSAGE ---
-    
-    // Si on arrive sur une case VIDE
+    // Atterrissage
     if (game->grid[next_l][next_c] == NONE) {
         if (game->moves_remaining == 0) {
-            // Fin du tour normale
+            // Fin de mouvement normale
             game->grid[next_l][next_c] = game->picked_size;
             game->is_picked = false;
             game->current_player = NO_PLAYER;
             game->picked_size = NONE;
             game->history_count = 0;
         }
-        // Sinon, on continue de voler
     } 
-    // Si on arrive sur une case OCCUPÉE
-    else {
-        // On ne fait RIEN de spécial ici.
-        // moves_remaining est tombé à 0 (garanti par is_move_possible).
-        // On reste "is_picked = true".
-        // Le main va détecter moves=0, voir qu'on est picked, et afficher le menu Swap/Rebond.
-        // Au prochain appel (Rebond), le bloc "GESTION DU REBOND" au début de cette fonction s'activera.
-    }
+    // Sinon (atterrissage sur pièce) : on laisse is_picked à true, moves à 0.
+    // Le main détectera le rebond au prochain tour.
 
     return OK;
 }
@@ -365,22 +333,17 @@ return_code move_piece(board game, direction dir) {
 return_code swap_piece(board game, int target_line, int target_column) {
     if (!game->is_picked) return EMPTY;
     
-    // Swap possible seulement si on est "sur" une pièce (donc case occupée)
     if (game->grid[game->picked_line][game->picked_col] == NONE) return FORBIDDEN;
     
-    // Cible valide et vide
     if (!is_valid_coord(target_line, target_column)) return PARAM;
     if (game->grid[target_line][target_column] != NONE) return FORBIDDEN;
 
     size piece_in_hand = game->picked_size;
     size piece_on_board = game->grid[game->picked_line][game->picked_col];
 
-    // La pièce en main prend la place
     game->grid[game->picked_line][game->picked_col] = piece_in_hand;
-    // La pièce du dessous va à la cible
     game->grid[target_line][target_column] = piece_on_board;
 
-    // Fin du tour
     game->is_picked = false;
     game->current_player = NO_PLAYER;
     game->history_count = 0;
