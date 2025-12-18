@@ -122,3 +122,60 @@ int northmost_occupied_line(board game){
     return -1;
 }
 
+player picked_piece_owner(board game){
+    if (game->is_piece_picked == true){
+        return current_player;
+    }
+    return NO_PLAYER;
+
+}
+
+
+size picked_piece_size(board game){
+    if (is_piece_picked == true){
+        return game->grid[game->line][game->column];
+    }
+    
+    return NONE;
+}
+
+int picked_piece_line(board game){
+    if (game->is_piece_picked == true){
+        return game->picked_line;
+    }
+    return -1;
+}
+
+
+int picked_piece_column(board game){
+    if (game->is_piece_picked == true){
+        return game->picked_column;
+    }
+    return -1;    
+}
+
+
+int movement_left(board game){
+    if (game->is_piece_picked == true){
+        if(game->moves_remaining == 0){
+            return 0;
+        }
+        return game->moves_remaining;
+
+    }
+    return -1;
+
+}
+
+int nb_pieces_available(board game, size piece, player player){
+    if !(piece == 1 && pice == 2 && piece == 3){
+        return -1;
+    }
+    elif(current_player == NO_PLAYER){
+        return -1;
+    }
+    else{
+        return NB_SIZE game->pieces_placed[player][size]
+    }
+
+}
