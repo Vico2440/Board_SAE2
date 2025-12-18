@@ -3,6 +3,11 @@
 #include <time.h>
 #include "board.h"
 
+// Structure pour l'historique de mouvement (Undo)
+typedef struct {
+    int x;
+    int y;
+} Position;
 
 /// @brief Enumération des différents Etats du jeu
 typedef enum {
@@ -14,193 +19,91 @@ typedef enum {
 } GameState;
 
 /// @brief Fonction qui permet d'alterner entre Joueur NORD ET SUD 
-/// @param lastPlayer joueur du dernier tour
-/// @return joueur du prochain tour
 player turn_manager(player lastPlayer, char *name_n, char *name_s)
 {
-    if (lastPlayer == SOUTH_P)
-    {
-        printf("Tour de %s (\x1b[34m\x1b[1m NORD \x1b[0m)\n", name_n);
-        return NORTH_P;
-    }
-    else
-    {
-        printf("Tour de %s (\x1b[31m\x1b[1m SUD \x1b[0m)\n", name_s);
-        return SOUTH_P;
-    }
+    if (lastPlayer == SOUTH_P) return NORTH_P;
+    else return SOUTH_P;
 }
 
-
-/// @brief Fonction permettant d'afficher le plateau de jeu et autres information
-/// @param game plateau à display
-void display_board(board game, char *name_n, char *name_s)
+/// @brief Fonction d'affichage
+void display_board(board game, player current_player, char *name_n, char *name_s, int sel_x, int sel_y, size held_piece_size)
 {
-    // --- MODIFICATION ICI ---
-    // \x1b[H  : Déplace le curseur en haut à gauche (Home)
-    // \x1b[2J : Efface tout l'écran (Clear Screen)
-    printf("\x1b[H\x1b[2J");
-    // ------------------------
+    printf("\x1b[H\x1b[2J"); // Refresh écran
 
-    size piece;
+    size piece_on_board;
+    char *ind_n = "";
+    char *ind_s = "";
+
+    if (current_player == NORTH_P) ind_n = "  \x1b[1m<-- A TOI\x1b[0m";
+    else if (current_player == SOUTH_P) ind_s = "  \x1b[1m<-- A TOI\x1b[0m";
 
     printf("\n");
-    printf("         NORD : \x1b[34m%s\x1b[0m       \n", name_n);
+    printf("         NORD : \x1b[34m%s\x1b[0m%s       \n", name_n, ind_n);
     printf("  //  //  // \\\\  \\\\  \\\\\n");
     printf("\x1b[90m╔═══╦═══╦═══╦═══╦═══╦═══╗\x1b[0m\n");
 
-    
     for (int lig = DIMENSION - 1; lig >= 0; lig--) { 
-        
         for (int col = 0; col < DIMENSION; col++) {
-            piece = get_piece_size(game, lig, col); 
+            piece_on_board = get_piece_size(game, lig, col); 
             printf("\x1b[90m║\x1b[0m");
 
-            switch (piece)
-            {
-                case ONE:
-                    printf("\x1b[34m\x1b[1m 1 \x1b[0m");
-                    break;
-                case TWO:
-                    printf("\x1b[32m\x1b[1m 2 \x1b[0m"); 
-                    break;
-                case THREE:
-                    printf("\x1b[31m\x1b[1m 3 \x1b[0m"); 
-                    break;
-                default:
-                    printf("   "); 
-                    break;
+            bool isSelected = (lig == sel_x && col == sel_y);
+
+            if (isSelected && held_piece_size != NONE) {
+                switch (held_piece_size) {
+                    case ONE:   printf("\x1b[33m\x1b[1m*1*\x1b[0m"); break; 
+                    case TWO:   printf("\x1b[33m\x1b[1m*2*\x1b[0m"); break;
+                    case THREE: printf("\x1b[33m\x1b[1m*3*\x1b[0m"); break;
+                    default:    printf(" * "); break;
+                }
+            } 
+            else {
+                switch (piece_on_board) {
+                    case ONE:   printf("\x1b[34m\x1b[1m 1 \x1b[0m"); break;
+                    case TWO:   printf("\x1b[32m\x1b[1m 2 \x1b[0m"); break;
+                    case THREE: printf("\x1b[31m\x1b[1m 3 \x1b[0m"); break;
+                    default:    printf("   "); break;
+                }
             }
         }
-
         printf("\x1b[90m║\x1b[0m %d", lig + 1); 
 
-        //affichage aide menu
         printf("    "); 
-
-        if (lig == DIMENSION - 1) {
-            printf("\x1b[1m--- COMMANDES ---\x1b[0m");
-        }
-        else if (lig == DIMENSION - 2) {
-            printf("[N, S, E, O, G] : Directions");
-        }
-        else if (lig == DIMENSION - 3) {
-            printf("[M] : Valider mouvement");
-        }
-        else if (lig == DIMENSION - 4) {
-            printf("[U] : Undo / [C] : Cancel");
-        }
-        else if (lig == DIMENSION - 6) {
-            printf("[s]wap / [r]ebond");
-        }
-
+        if (lig == DIMENSION - 1) printf("\x1b[1m--- COMMANDES ---\x1b[0m");
+        else if (lig == DIMENSION - 2) printf("[N, S, E, O, G] : Directions");
+        else if (lig == DIMENSION - 3) printf("[M] : Valider mouvement");
+        else if (lig == DIMENSION - 4) printf("[U] : Undo / [C] : Cancel");
+        else if (lig == DIMENSION - 6) printf("[s]wap / [r]ebond");
         printf("\n"); 
 
-        if (lig > 0) { 
-            printf("\x1b[90m╠═══╬═══╬═══╬═══╬═══╬═══╣\x1b[0m\n");
-        }
+        if (lig > 0) printf("\x1b[90m╠═══╬═══╬═══╬═══╬═══╬═══╣\x1b[0m\n");
     }
 
     printf("\x1b[90m╚═══╩═══╩═══╩═══╩═══╩═══╝\x1b[0m\n");
     printf("  \\\\  \\\\  \\\\ //  //  //\n");
-    
-    printf("         SUD : \x1b[31m%s\x1b[0m       \n", name_s);
-    printf("__________________________________________________ \n");
+    printf("         SUD : \x1b[31m%s\x1b[0m%s       \n", name_s, ind_s);
+	printf("__________________________________________________ \n");
 }
 
-/// @brief reçoie le resultat de pile ou face
-/// @param n pile ou face 
-/// @return  renvoie le premier joueur de la partie à jouer
 int pile_ou_face() 
 {
     srand(time(NULL));
-
-    int r = rand() % 2; 
-
-    return r; 
+    return rand() % 2; 
 }
 
 player first_player(int n)
 {
-	if(n == 0)
-	{
-		return SOUTH_P;
-	}
-
-	return NORTH_P;
+	return (n == 0) ? SOUTH_P : NORTH_P;
 }
 
-/// @brief Fonction qui permet de savoir si il reste de piece à placé pour un joueur
-/// @param p joueur à tester
-/// @param game plateau de jeu
-/// @return si il reste de pièce à placé ou non
 bool reste_des_piece(player p, board game)
 {
-	if(nb_pieces_available(game, ONE, p) != 0)
-	{
-		return true;
-	}
-	if(nb_pieces_available(game, TWO, p) != 0)
-	{
-		return true;
-	}
-	if(nb_pieces_available(game, THREE, p) != 0)
-	{
-		return true;
-	}
-
+	if(nb_pieces_available(game, ONE, p) != 0) return true;
+	if(nb_pieces_available(game, TWO, p) != 0) return true;
+	if(nb_pieces_available(game, THREE, p) != 0) return true;
 	return false;
 }
 
-/// @brief Fonction qui renvoie une direction en fonction de la lettre tapé
-/// @return la direction 
-direction saisir_dir()
-{
-	char c;
-
-	bool isValide = true;
-	
-	while(isValide)
-	{
-		printf("Veuillez saisir une direction : ");
-		scanf(" %c",&c);
-
-		if(c == 'N' || c == 'S' || c == 'E' || c == 'O' || c == 'G')
-		{
-			isValide = false;
-		}
-		else
-		{
-			printf("NON VALIDE : Veuillez saisir 'N', 'S', 'E' 'O' ou 'G'");
-		}	
-	}	
-	direction dir;
-	switch (c)
-	{
-	case 'N':
-		dir = NORTH;
-		break;
-	case 'S':
-		dir = SOUTH;
-		break;	
-	case 'E':
-		dir = EAST;
-		break;
-	case 'O':
-		dir = WEST;
-		break;	
-
-	case 'G':
-		dir = GOAL;
-		break;
-	}
-
-	return dir;
-}
-
-/// @brief Fonction qui dmemande la taille à saisir 
-/// @param game plateau de jeu
-/// @param p joueur qui joue 
-/// @return taille de la pièce 
 int saisir_piece(board game, player p)
 {
     int nb = 0;
@@ -209,438 +112,324 @@ int saisir_piece(board game, player p)
     
     while (isValide)
     {
-        int result;
-
         printf("Veuillez saisir une taille de Pièce (1, 2 ou 3) : ");
-
-        result = scanf("%d", &nb);
-
-
-        if (result != 1)
-        {
-            int c;
-            while ((c = getchar()) != '\n' && c != EOF);
-
-            printf("Entrée invalide : vous devez taper un nombre.\n");
+        if (scanf("%d", &nb) != 1) {
+            int c; while ((c = getchar()) != '\n' && c != EOF);
+            printf("Entrée invalide.\n");
             continue; 
         }
 
-        if (nb >= 1 && nb <= 3)
-        {
-            switch (nb)
-            {
-                case 1: 
-				taille = ONE;   
-				break;
-                case 2: 
-				taille = TWO;  
-				break;
-                case 3: 
-				taille = THREE; 
-				break;
+        if (nb >= 1 && nb <= 3) {
+            switch (nb) {
+                case 1: taille = ONE; break;
+                case 2: taille = TWO; break;
+                case 3: taille = THREE; break;
             }
-
-            if (nb_pieces_available(game, taille, p) != 0)
-            {
-                isValide = false;
-                return nb; 
-            }
-            else
-            {
-                printf("Vous n'avez plus de pièce %d !\n", nb);
-            }
-        }
-        else
-        {
+            if (nb_pieces_available(game, taille, p) != 0) return nb; 
+            else printf("Vous n'avez plus de pièce %d !\n", nb);
+        } else {
             printf("NON VALIDE : Veuillez saisir 1, 2, ou 3.\n");
         }
     }
-
     return nb; 
 }
 
-/// @brief Fonction qui permet de saisir coordonnée de la mise en place des pièce en début de jeu
-/// @param game plateau de jeu
-/// @param message message personnalisé en fonction du joueur
-/// @param min Coordonnée minimum accepter
-/// @param max Coordonnée max Accepter
-/// @param nbVal 
-/// @param p Joueur qui joue 
-/// @return retour de la colonne ou placé la piece 
+// --- MODIFICATION POUR AUTO SETUP (67) ---
 int saisir_coord(board game, const char *message, int min, int max, int nbVal, player p)
 {
-    int nb;          
-    int colIndex; 
-	int result;   
-
+    int nb, colIndex;   
     int fixedLine = (p == SOUTH_P) ? 0 : DIMENSION - 1;  
 
     do {
         printf("%s (%d à %d) : ", message, min, max);
-
-		result = scanf("%d", &nb);
-		
-
-        if (result != 1)
-        {
-            int c;
-            while ((c = getchar()) != '\n' && c != EOF);
-
-            printf("Entrée invalide : vous devez taper un nombre.\n");
+		if (scanf("%d", &nb) != 1) {
+            int c; while ((c = getchar()) != '\n' && c != EOF);
             continue; 
         }
-		
+
+        // --- CHEAT CODE ---
+        if (nb == 67) {
+            return -99; // Code secret pour l'auto-placement
+        }
+        // ------------------
 
         if (nb < min || nb > max) {
-            printf("Valeur invalide, recommencez.\n");
+            printf("Valeur invalide.\n");
             continue;  
         }
 
         colIndex = nb - 1;
-
         if (nbVal == 1) {
             if (get_piece_size(game, fixedLine, colIndex) != NONE) {
-                printf("Cette case (%d,%d) est déjà occupée, choisissez-en une autre.\n",
-                       fixedLine + 1, colIndex + 1);
-                nb = -1;
+                printf("Case (%d,%d) occupée.\n", fixedLine + 1, colIndex + 1);
                 continue;
             }
         }
-
         break;
-
     } while (1);
-
     return colIndex;
 }
 
-/// @brief fonction qui demande de saisir un nombre, utilisé pour saisir coordonnées lors de la phase de jeu
-/// @param message message personnalisé pour afficher si colonne ou ligne
-/// @return retourne la coordonnée de la ligne ou colonne 
 int saisir_nb(const char *message)
 {
     int nb;
-    int result;
-
     do {
         printf("%s", message);  
-
-        result = scanf("%d", &nb);
-
-        if (result != 1)
-        {
-            int c;
-            while ((c = getchar()) != '\n' && c != EOF);
-
-            printf("Entrée invalide : vous devez taper un nombre.\n");
+        if (scanf("%d", &nb) != 1) {
+            int c; while ((c = getchar()) != '\n' && c != EOF);
             continue;
         }
-
-        if (nb < 1 || nb > 6) {
-            printf("Valeur invalide, recommencez.\n");
-        }
-
+        if (nb < 1 || nb > 6) printf("Valeur invalide (1-6).\n");
     } while (nb < 1 || nb > 6);
-
     return nb - 1;  
 }
 
-/// @brief Fonction qui permet de setup les pièces en début de jeu
-/// @param game plateau de jeu
-/// @param p joueur qui place 
+// --- NOUVELLE FONCTION : PLACEMENT AUTOMATIQUE ---
+void auto_place_remaining(board game, player p) {
+    int row = (p == SOUTH_P) ? 0 : DIMENSION - 1;
+    
+    // On parcourt les tailles de 3 à 1
+    for (int s = 3; s >= 1; s--) {
+        size taille_enum = (s == 1) ? ONE : (s == 2) ? TWO : THREE;
+
+        // Tant qu'il reste des pièces de cette taille
+        while (nb_pieces_available(game, taille_enum, p) > 0) {
+            // On cherche la première colonne vide
+            for (int col = 0; col < DIMENSION; col++) {
+                if (get_piece_size(game, row, col) == NONE) {
+                    place_piece(game, s, p, col);
+                    break; // Pièce posée, on passe à la suivante
+                }
+            }
+        }
+    }
+}
+
 void setup_pieces_game(board game, player p, char *name_n, char *name_s)
 {
     bool canPlace = true;
     int column = 0;
     int piece = 0;
-    bool restePS = true;
-    bool restePN = true;
     
     while(canPlace)
     {
-        display_board(game, name_n, name_s); // On passe les noms ici
+        display_board(game, p, name_n, name_s, -1, -1, NONE); 
 
-        restePS = reste_des_piece(SOUTH_P,game);
-        restePN = reste_des_piece(NORTH_P,game);
-
-        if(restePS == false && restePN == false)
-        {
+        // Si personne n'a plus rien, on sort
+        if(!reste_des_piece(SOUTH_P,game) && !reste_des_piece(NORTH_P,game)) {
             canPlace = false;
             break;
         }
 
-        if(p == NORTH_P)
-        {
-            printf("%s (NORD), numéro de la colonne", name_n); // Petit ajout perso
-            column = saisir_coord(game, " : ", 1, DIMENSION, 1, p);
-            piece = saisir_piece(game, p);
+        // On vérifie si le joueur actuel a encore des pièces
+        // S'il n'en a plus (parce qu'il a déjà tout placé), on passe son tour
+        if (!reste_des_piece(p, game)) {
+            p = turn_manager(p, name_n, name_s);
+            continue;
         }
-        else
-        {
-            printf("%s (SUD), numéro de la colonne", name_s); // Petit ajout perso
-            column = saisir_coord(game, " : ", 1, DIMENSION, 1, p);
-            piece = saisir_piece(game, p);
-        }
-        
-        place_piece(game, piece, p, column);
 
-        p = turn_manager(p, name_n, name_s); // Et ici
+        // --- SAISIE ---
+        if(p == NORTH_P) printf("%s (NORD), numéro de la colonne", name_n);
+        else printf("%s (SUD), numéro de la colonne", name_s);
+            
+        column = saisir_coord(game, " : ", 1, DIMENSION, 1, p);
+
+        // --- GESTION DU CODE 67 ---
+        if (column == -99) {
+            printf(">> SETUP AUTOMATIQUE ACTIVÉ pour %s !\n", (p==NORTH_P)?name_n:name_s);
+            auto_place_remaining(game, p);
+            // On ne demande pas la pièce, on passe direct au joueur suivant
+            p = turn_manager(p, name_n, name_s);
+            continue; 
+        }
+        // --------------------------
+        
+        // Comportement normal si pas 67
+        piece = saisir_piece(game, p);
+        place_piece(game, piece, p, column);
+        p = turn_manager(p, name_n, name_s);
     }   
 }
 
-/// @brief Etat de la FSM pour mettre en place le jeu et plateau de jeu
-/// @param game plateau de jeu
-/// @param current_player joueur qui joue
-/// @return prochain etat du jeu
 GameState state_setup(board game, player current_player, char *name_n, char *name_s)
 {
     setup_pieces_game(game, current_player, name_n, name_s);
-
     return STATE_TURN_START;
 }
-
 
 GameState state_turn_start(board game, player *current_player, char *name_n, char *name_s)
 {
     *current_player = turn_manager(*current_player, name_n, name_s);
-
     return STATE_PLAYER_TURN;
 }
 
-/// @brief Etat du tour du joueur pick de pièce, déplacement et tout action
-/// @param game plateau de jeu
-/// @param current_player joueur qui joue
-/// @return prochain etat du jeu
 GameState state_player_turn(board game, player *current_player, char *name_n, char *name_s)
 {
-    int x = 0;
-    int y = 0; 
+    int x = 0, y = 0; 
     direction dir;
     return_code rc;
 
-    
-    display_board(game, name_n, name_s);
-
+    display_board(game, *current_player, name_n, name_s, -1, -1, NONE);
     
     x = saisir_nb("Choisir la ligne de la pièce (1-6) : ");   
     y = saisir_nb("Choisir la colonne de la pièce (1-6) : ");   
 
+    size picked_size = get_piece_size(game, x, y);
+
     rc = pick_piece(game, *current_player, x, y);
     if (rc != OK) {
         printf("Impossible de prendre cette pièce (code %d)\n", rc);
+        printf("Appuyez sur Entrée...");
+        getchar(); getchar();
         return STATE_PLAYER_TURN; 
     }
 
-    
+    // Init Tracking
+    Position history[50]; 
+    int hist_idx = 0;
+    int cur_x = x; 
+    int cur_y = y; 
+
+    history[hist_idx].x = cur_x;
+    history[hist_idx].y = cur_y;
+    hist_idx++;
+
+    display_board(game, *current_player, name_n, name_s, cur_x, cur_y, picked_size);
+
     while (picked_piece_owner(game) == *current_player) {
 
         int moves = movement_left(game);
         printf("Mouvements restants = %d\n", moves);
 
-        if (moves == -1) {
-            
-            break;
-        }
+        if (moves == -1) break; 
 
-        
-        printf("\nCommandes :\n");
-        printf("N / S / O / E : déplacer la pièce\n");
-        printf("U : annuler le dernier pas\n");
-        printf("C : annuler tout le mouvement\n");
-        if (is_move_possible(game, GOAL)) {
-            printf("G : aller vers le but\n");
-        }
-
+        printf("\n[N, S, E, O] Deplacer | [U] Undo | [C] Cancel | [G] Goal\n");
         printf("Votre choix : ");
         char cmd;
         scanf(" %c", &cmd);
 
-        
         if (cmd == 'U') {
             rc = cancel_step(game);
-            if (rc != OK) {
-                printf("Impossible d'annuler le dernier pas (code %d)\n", rc);
+            if (rc == OK) {
+                if (hist_idx > 1) {
+                    hist_idx--; 
+                    cur_x = history[hist_idx - 1].x;
+                    cur_y = history[hist_idx - 1].y;
+                }
+                display_board(game, *current_player, name_n, name_s, cur_x, cur_y, picked_size); 
             } else {
-                printf("Dernier pas annulé.\n");
-                display_board(game, name_n, name_s); 
+                printf("Impossible d'annuler.\n");
             }
             continue;
         }
 
-        
         if (cmd == 'C') {
-            rc = cancel_movement(game);
-            if (rc != OK) {
-                printf("Impossible d'annuler le mouvement (code %d)\n", rc);
-                continue;
-            }
-            printf("Mouvement complet annulé. Vous pouvez choisir une autre pièce.\n");
-            display_board(game, name_n, name_s); 
+            cancel_movement(game);
+            display_board(game, *current_player, name_n, name_s, -1, -1, NONE); 
             return STATE_PLAYER_TURN;
         }
 
         if (cmd == 'G') {
-            if (!is_move_possible(game, GOAL)) {
-                printf("Impossible d'aller au but maintenant.\n");
+            if (is_move_possible(game, GOAL)) {
+                move_piece(game, GOAL);
+                display_board(game, *current_player, name_n, name_s, -1, -1, NONE); 
+                continue;
+            } else {
+                printf("Impossible d'aller au but.\n");
                 continue;
             }
-
-            rc = move_piece(game, GOAL);
-            if (rc != OK) {
-                printf("Erreur move_piece (code %d)\n", rc);
-            }
-            display_board(game, name_n, name_s); 
-            continue;
         }
 
-        
         if (cmd == 'N' || cmd == 'S' || cmd == 'E' || cmd == 'O') {
-            dir = (cmd == 'N') ? NORTH :
-                  (cmd == 'S') ? SOUTH :
-                  (cmd == 'E') ? EAST  : WEST;
+            dir = (cmd == 'N') ? NORTH : (cmd == 'S') ? SOUTH : (cmd == 'E') ? EAST : WEST;
 
-            
             if (moves == 0) {
                 char choix;
-                printf("La piece est sur une autre piece.\n");
-                printf("  r = rebondir (continuer le mouvement)\n");
-                printf("  s = swap (échanger)\n");
-                printf("Votre choix : ");
+                printf("Bloqué ! [r]ebond ou [s]wap ? : ");
                 scanf(" %c", &choix);
 
-                // swap
                 if (choix == 's') {
-                    int tl, tc;
-                    tl = saisir_nb("Ligne cible pour le swap : ");
-                    tc = saisir_nb("Colonne cible pour le swap : ");
-
-                    rc = swap_piece(game, tl, tc);
-                    if (rc != OK) {
-                        printf("Swap impossible (code %d), réessaie.\n", rc);
-                        continue;
+                    int tl = saisir_nb("Ligne swap : ");
+                    int tc = saisir_nb("Colonne swap : ");
+                    if (swap_piece(game, tl, tc) == OK) {
+                        cur_x = tl; cur_y = tc;
+                        history[hist_idx].x = cur_x; history[hist_idx].y = cur_y; hist_idx++;
+                        display_board(game, *current_player, name_n, name_s, cur_x, cur_y, picked_size); 
+                        break; 
                     }
-
-                    printf("Swap réussi.\n");
-                    display_board(game, name_n, name_s); 
-                    break; 
+                    continue; 
                 }
+            }
 
-                // rebond
-                if (!is_move_possible(game, dir)) {
-                    printf("Mouvement impossible dans cette direction.\n");
-                    continue;
-                }
-
+            if (is_move_possible(game, dir)) {
                 rc = move_piece(game, dir);
-                if (rc != OK) {
-                    printf("Erreur move_piece (code %d)\n", rc);
-                    continue;
+                if (rc == OK) {
+                    if (cmd == 'N') cur_x++;
+                    if (cmd == 'S') cur_x--;
+                    if (cmd == 'E') cur_y++;
+                    if (cmd == 'O') cur_y--;
+                    
+                    if(hist_idx < 49) {
+                        history[hist_idx].x = cur_x;
+                        history[hist_idx].y = cur_y;
+                        hist_idx++;
+                    }
+                    display_board(game, *current_player, name_n, name_s, cur_x, cur_y, picked_size); 
                 }
-
-                display_board(game, name_n, name_s); 
-                continue;
+            } else {
+                printf("Mouvement impossible !\n");
+                getchar(); getchar(); 
+                display_board(game, *current_player, name_n, name_s, cur_x, cur_y, picked_size); 
             }
-
-            
-            if (!is_move_possible(game, dir)) {
-                printf("Mouvement impossible.\n");
-                continue;
-            }
-
-            rc = move_piece(game, dir);
-            if (rc != OK) {
-                printf("Erreur move_piece (code %d)\n", rc);
-                continue;
-            }
-
-            display_board(game, name_n, name_s); 
             continue;
         }
-
-        
         printf("Commande inconnue.\n");
     }
 
-    
-    if (movement_left(game) == -1) {
-        return STATE_END_TURN;  
-    }
+    display_board(game, *current_player, name_n, name_s, -1, -1, NONE);
 
+    if (movement_left(game) == -1) return STATE_END_TURN;  
     return STATE_PLAYER_TURN;
 }
 
-
-/// @brief Etat de fin de tour qui test si le jeu est fini ou non 
-/// @param game plateau de jeu
-/// @param current_player joueur qui joue
-/// @return prochain etat du jeu
 GameState state_end_turn(board game, player *current_player, char *name_n, char *name_s)
 {
     player w = get_winner(game);
-
     if (w != NO_PLAYER) {
-        if (w == NORTH_P)
-            printf("VICTOIRE ! Bravo %s (NORD) a gagné !\n", name_n);
-        else
-            printf("VICTOIRE ! Bravo %s (SUD) a gagné !\n", name_s);
-            
+        printf("\x1b[H\x1b[2J"); 
+        display_board(game, *current_player, name_n, name_s, -1, -1, NONE);
+        printf("\n\n****************************************\n");
+        printf(" VICTOIRE ! Bravo %s a gagné !\n", (w == NORTH_P) ? name_n : name_s);   
+        printf("****************************************\n\n");
         return STATE_GAME_OVER;
     }
-
     return STATE_TURN_START;
 }
 
 int main(int args, char **argv)
 {
+    printf("\x1b[H\x1b[2J"); 
+
     board game = new_game();
+    char name_n[50], name_s[50];
 
+    printf("--- JEU DE PLATEAU ---\n\n");
+    printf("Nom JOUEUR NORD : "); scanf("%s", name_n);
+    printf("Nom JOUEUR SUD : "); scanf("%s", name_s);
     
-    char name_n[50];
-    char name_s[50];
-
-    printf("Entrez le nom du joueur NORD : ");
-    scanf("%s", name_n);
-
-    printf("Entrez le nom du joueur SUD : ");
-    scanf("%s", name_s);
-    
-
     player p = first_player(pile_ou_face());
-
     GameState state = STATE_SETUP;
 
-    if(p == NORTH_P)
-    {
-        printf("%s (Nord) commence !\n", name_n);
-    }
-    else
-    {
-        printf("%s (Sud) commence !\n", name_s);
-    }
-
-    printf("Un plateau est créé.\n");
+    printf("%s commence !\n", (p == NORTH_P) ? name_n : name_s);
 
     while (state != STATE_GAME_OVER) {
         switch (state) {
-            case STATE_SETUP:
-                state = state_setup(game, p, name_n, name_s);
-                break;
-            case STATE_TURN_START:
-                state = state_turn_start(game, &p, name_n, name_s);
-                break;
-            case STATE_PLAYER_TURN:
-                state = state_player_turn(game, &p, name_n, name_s);
-                break;
-            case STATE_END_TURN:
-                state = state_end_turn(game, &p, name_n, name_s);
-                break;
+            case STATE_SETUP:      state = state_setup(game, p, name_n, name_s); break;
+            case STATE_TURN_START: state = state_turn_start(game, &p, name_n, name_s); break;
+            case STATE_PLAYER_TURN:state = state_player_turn(game, &p, name_n, name_s); break;
+            case STATE_END_TURN:   state = state_end_turn(game, &p, name_n, name_s); break;
         }
     }
-    
     destroy_game(game);
-    printf("suppression du plateau et sortie\n");
-
     return 0;
 }
-
-
