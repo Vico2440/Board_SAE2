@@ -279,8 +279,9 @@ return_code move_piece(board game, direction direction) {
     game->p_col = new_c;
     game->moves_remaining--;
     
-    // A COMMENTER
+    
     if (game->grid[new_l][new_c] != NONE) {
+        //Ne se passe rien pour conserver la pièce en main et permettre le rebond ou swap
     }
     else {
         if (game->moves_remaining == 0) {
@@ -309,10 +310,11 @@ return_code swap_piece(board game, int target_line, int target_column) {
         return FORBIDDEN;
     } 
 
+    //on déplace la pièce aux coordonnées choisies
     size piece_under = game->grid[game->p_line][game->p_col];
     game->grid[target_line][target_column] = piece_under;
 
-    //A COMMENTER
+    //on pose la pièce aux coordonnées de la pièce qui a été déplacer
     game->grid[game->p_line][game->p_col] = game->picked_piece;
 
     game->picked_piece = NONE;
@@ -324,7 +326,7 @@ return_code swap_piece(board game, int target_line, int target_column) {
 return_code cancel_movement(board game) {
     if (game->picked_piece == NONE){
         return EMPTY;
-    }
+    }   // La main
 
     //on remet la pièce à sa place initial
     game->grid[game->start_line][game->start_col] = game->picked_piece;
@@ -336,7 +338,7 @@ return_code cancel_movement(board game) {
     game->p_col = -1;
     game->moves_remaining = 0;
     
-    return OK;
+    return OK;   // La main
 }
 
 return_code cancel_step(board game) {
