@@ -11,20 +11,23 @@ typedef struct {
     int moves_at_step;
 } step_history;
 
-//
+// Structure principale du plateau de jeu
 struct board_s {
-    size grid[DIMENSION][DIMENSION];
+    size grid[DIMENSION][DIMENSION]; 
 
+    // Compteurs pour la phase de placement 
     int setup_counts[NB_PLAYERS + 1][NB_SIZE + 1];
 
     player winner;
 
+    //Attributs de la pièce en main
     player current_player;
     size picked_piece;
     int p_line;
     int p_col;
     int moves_remaining;
     
+
     int start_line;
     int start_col;
 
@@ -32,15 +35,20 @@ struct board_s {
     int history_index;
 };
 
+// Fonction pour l'initialisation d'une nouvelle partie
 board new_game() {
+
+    // Allocation mémoire pour la structure du board
     board game = (board)malloc(sizeof(struct board_s));
     
+    //Boucle d'initialisation du board à NONE
     for(int i=0; i<DIMENSION; i++){
         for(int j=0; j<DIMENSION; j++){
             game->grid[i][j] = NONE;
         }
     }
 
+    // Initialisation des compteurs de setup à 0
     for(int p=0; p<=NB_PLAYERS; p++){
         for(int s=0; s<=NB_SIZE; s++){
             game->setup_counts[p][s] = 0;
@@ -57,91 +65,145 @@ board new_game() {
     return game;
 }
 
+// Fonction pour copier l'état actuel du jeu
 board copy_game(board original_game) {
     board copy = new_game();
     *copy = *original_game; 
     return copy;
 }
 
+// Fonction pour libérer la mémoire allouée au jeu
 void destroy_game(board game) {
     if (game != NULL) {
         free(game);
     }
 }
 
+// Fonction pour la gestion de tours passage aux joueurs suivants
 player next_player(player current_player) {
-    if (current_player == SOUTH_P) return NORTH_P;
+    if (current_player == SOUTH_P)
+    {
+        return NORTH_P;
+    } 
     return SOUTH_P;
 }
 
+// fonction qui vérifie si une coordonnée rentrée est dans le plateau
 bool is_inside(int line, int col) {
     return (line >= 0 && line < DIMENSION && col >= 0 && col < DIMENSION);
 }
 
 size get_piece_size(board game, int line, int column) {
-    if (!is_inside(line, column)) return NONE;
+
+    //Si les coordonnées rentrées ne sont pas dans le plateau on retourne NONE
+    if (!is_inside(line, column)) 
+    {
+        return NONE;
+    }
     
+    // Si la pièce est en main, on la retourne
     if (game->picked_piece != NONE && game->p_line == line && game->p_col == column) {
         return game->picked_piece;
     }
 
+    // Sinon, on retourne la pièce dans le board
     return game->grid[line][column];
 }
 
+
+// Fonction pour obtenir le gagnant
 player get_winner(board game) {
     return game->winner;
 }
 
+// Trouve la ligne la plus au sud qui contient une pièce
 int southmost_occupied_line(board game) {
+
+    // Parcours du plateau de haut en bas
     for (int l = 0; l < DIMENSION; l++) {
         for (int c = 0; c < DIMENSION; c++) {
-            if (game->grid[l][c] != NONE) return l;
+            if (game->grid[l][c] != NONE) 
+            {
+                return l;
+            }
         }
     }
     return -1;
 }
 
+// Trouve la ligne la plus au nord qui contient une pièce
 int northmost_occupied_line(board game) {
+
+    // Parcours du plateau de bas en haut
     for (int l = DIMENSION - 1; l >= 0; l--) {
         for (int c = 0; c < DIMENSION; c++) {
-            if (game->grid[l][c] != NONE) return l;
+            if (game->grid[l][c] != NONE) 
+            {
+                return l;
+            }
         }
     }
     return -1;
 }
 
+// Fonction qui retourne le joueur propriétaire de la pièce en main
 player picked_piece_owner(board game) {
-    if (game->picked_piece == NONE) return NO_PLAYER;
+    if (game->picked_piece == NONE) 
+    {
+        return NO_PLAYER;
+    }
     return game->current_player;
 }
 
+// Fonction qui retourne la taille de la pièce en main
 size picked_piece_size(board game) {
     return game->picked_piece;
 }
 
+// Fonction qui retourne la ligne de la pièce en main
 int picked_piece_line(board game) {
     return game->p_line;
 }
 
+// Fonction qui retourne la colonne de la pièce en main
 int picked_piece_column(board game) {
     return game->p_col;
 }
 
+// Fonction qui retourne le nombre de mouvements restants pour la pièce en main
 int movement_left(board game) {
-    if (game->picked_piece == NONE) return -1;
+    if (game->picked_piece == NONE) 
+    {
+        return -1;
+    }
     return game->moves_remaining;
 }
 
+//Fonction qui retourne le nombre de pièces disponibles pour un joueur et une taille donnée
 int nb_pieces_available(board game, size piece, player player) {
-    if (piece < ONE || piece > THREE) return -1;
+    if (piece < ONE || piece > THREE) 
+    {
+        return -1;
+    }
     return NB_INITIAL_PIECES - game->setup_counts[player][piece];
 }
 
+//Fonction pour placer une pièce sur le plateau
 return_code place_piece(board game, size piece, player player, int column) {
-    if (piece < ONE || piece > THREE || !is_inside(0, column)) return PARAM;
-    
-    if (nb_pieces_available(game, piece, player) <= 0) return FORBIDDEN;
 
+    //Si les pièce sont inférieures à ONE ou supérieures à THREE ou si la colonne n'est pas dans le plateau on retourne PARAM
+    if (piece < ONE || piece > THREE || !is_inside(0, column)) 
+    {
+        return PARAM;
+    }
+    
+    //Si le joueur n'a plus de pièces de cette taille on retourne FORBIDDEN
+    if (nb_pieces_available(game, piece, player) <= 0) 
+    {
+        return FORBIDDEN;
+    }
+
+    
     int line = (player == SOUTH_P) ? 0 : DIMENSION - 1;
 
     if (game->grid[line][column] != NONE) return EMPTY;
