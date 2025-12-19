@@ -326,7 +326,7 @@ return_code swap_piece(board game, int target_line, int target_column) {
 return_code cancel_movement(board game) {
     if (game->picked_piece == NONE){
         return EMPTY;
-    }   // La main
+    }   
 
     //on remet la pièce à sa place initial
     game->grid[game->start_line][game->start_col] = game->picked_piece;
@@ -338,7 +338,7 @@ return_code cancel_movement(board game) {
     game->p_col = -1;
     game->moves_remaining = 0;
     
-    return OK;   // La main
+    return OK;   
 }
 
 return_code cancel_step(board game) {
