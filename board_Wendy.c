@@ -153,24 +153,38 @@ return_code place_piece(board game, size piece, player player, int column) {
 }
 
 return_code pick_piece(board game, player current_player, int line, int column) {
-    if (!is_inside(line, column)) return PARAM;
-    if (game->winner != NO_PLAYER) return FORBIDDEN;
-    if (game->grid[line][column] == NONE) return EMPTY;
-    
-    if (current_player == SOUTH_P) {
-        if (line != southmost_occupied_line(game)) return FORBIDDEN;
-    } else {
-        if (line != northmost_occupied_line(game)) return FORBIDDEN;
+    //si c'est pas dans la grille
+    if (!is_inside(line, column)){
+        return PARAM;
+    } 
+    //si il y a déjà un gagnant
+    if (game->winner != NO_PLAYER){
+        return FORBIDDEN;
+    } 
+    //si la case est vide
+    if (game->grid[line][column] == NONE){
+        return EMPTY;
+    } 
+    //si le joueur est SUD mais que la ligne n'est pas celle la plus au sud
+    if (current_player == SOUTH_P && line != southmost_occupied_line(game)) {
+        return FORBIDDEN;     
+    } 
+    //si le joueur est NORD mais que la ligne n'est pas celle la plus au nord
+    if (line != northmost_occupied_line(game)){
+        return FORBIDDEN;
     }
 
+    //on actualise les informations du jeu
     game->current_player = current_player;
     game->picked_piece = game->grid[line][column];
     game->p_line = line;
     game->p_col = column;
     game->moves_remaining = game->picked_piece;
     
+    //la case devient vide
     game->grid[line][column] = NONE;
 
+    //pour annuler les mouvements
     game->start_line = line;
     game->start_col = column;
     game->history_index = 0;
@@ -181,27 +195,43 @@ return_code pick_piece(board game, player current_player, int line, int column) 
 bool is_move_possible(board game, direction direction) {
     if (game->picked_piece == NONE) return false;
 
+    //les coordonnées
     int target_l = game->p_line;
     int target_c = game->p_col;
 
     switch(direction) {
-        case NORTH: target_l++; break;
-        case SOUTH: target_l--; break;
-        case EAST:  target_c++; break;
-        case WEST:  target_c--; break;
+        case NORTH:
+            target_l++;
+            break;
+        case SOUTH:
+            target_l--;
+            break;
+        case EAST:
+            target_c++;
+            break;
+        case WEST:
+            target_c--;
+            break;
         case GOAL:
-            if (game->current_player == SOUTH_P && game->p_line == DIMENSION - 1) return true;
-            if (game->current_player == NORTH_P && game->p_line == 0) return true;
+            if (game->current_player == SOUTH_P && game->p_line == DIMENSION - 1){
+                return true;
+            }
+            if (game->current_player == NORTH_P && game->p_line == 0){
+                return true;
+            }    
             return false;
     }
 
+    //si c'est pas dans la grille -> false
     if (!is_inside(target_l, target_c)) return false;
 
+    // A FAIRE LE COMMENTAIRE
     if (game->moves_remaining == 0 && game->grid[game->p_line][game->p_col] != NONE) {
         if (game->grid[target_l][target_c] != NONE) return false;
         return true;
     }
 
+    //si on essaye de rebondir mais que ce n'est pas notre dernier déplacements -> false
     if (game->grid[target_l][target_c] != NONE) {
         if (game->moves_remaining != 1) return false;
     }
@@ -210,8 +240,13 @@ bool is_move_possible(board game, direction direction) {
 }
 
 return_code move_piece(board game, direction direction) {
-    if (game->picked_piece == NONE) return EMPTY;
-    if (!is_move_possible(game, direction)) return FORBIDDEN;
+    if (game->picked_piece == NONE){
+        return EMPTY;
+    } 
+
+    if (!is_move_possible(game, direction)){
+        return FORBIDDEN;
+    } 
 
     if (direction == GOAL) {
         game->winner = game->current_player;
@@ -227,20 +262,24 @@ return_code move_piece(board game, direction direction) {
     if (direction == EAST)  new_c++;
     if (direction == WEST)  new_c--;
 
+    //on actualise les données de l'historique des coups
     game->history[game->history_index].old_line = game->p_line;
     game->history[game->history_index].old_col = game->p_col;
     game->history[game->history_index].moves_at_step = game->moves_remaining;
     game->history_index++;
 
+    //si il y a un rebond on ajoute le nombre de coup en fonction de la valeur de la case
     if (game->moves_remaining == 0 && game->grid[game->p_line][game->p_col] != NONE) {
         int bounce_size = game->grid[game->p_line][game->p_col];
         game->moves_remaining = bounce_size;
     }
 
+    //on actualise les coordonnées de la pièce dans le jeu
     game->p_line = new_l;
     game->p_col = new_c;
     game->moves_remaining--;
-
+    
+    // A COMMENTER
     if (game->grid[new_l][new_c] != NONE) {
     }
     else {
@@ -254,15 +293,26 @@ return_code move_piece(board game, direction direction) {
 }
 
 return_code swap_piece(board game, int target_line, int target_column) {
-    if (game->picked_piece == NONE) return EMPTY;
-    if (game->grid[game->p_line][game->p_col] == NONE) return EMPTY;
+    if (game->picked_piece == NONE){
+        return EMPTY;
+    } 
 
-    if (!is_inside(target_line, target_column)) return PARAM;
-    if (game->grid[target_line][target_column] != NONE) return FORBIDDEN;
+    if (game->grid[game->p_line][game->p_col] == NONE){
+        return EMPTY;
+    } 
+
+    if (!is_inside(target_line, target_column)){
+        return PARAM;
+    }
+
+    if (game->grid[target_line][target_column] != NONE){
+        return FORBIDDEN;
+    } 
 
     size piece_under = game->grid[game->p_line][game->p_col];
     game->grid[target_line][target_column] = piece_under;
 
+    //A COMMENTER
     game->grid[game->p_line][game->p_col] = game->picked_piece;
 
     game->picked_piece = NONE;
@@ -272,10 +322,14 @@ return_code swap_piece(board game, int target_line, int target_column) {
 }
 
 return_code cancel_movement(board game) {
-    if (game->picked_piece == NONE) return EMPTY;
+    if (game->picked_piece == NONE){
+        return EMPTY;
+    }
 
+    //on remet la pièce à sa place initial
     game->grid[game->start_line][game->start_col] = game->picked_piece;
     
+    //on réinitialise les données du jeu
     game->picked_piece = NONE;
     game->current_player = NO_PLAYER;
     game->p_line = -1;
@@ -286,15 +340,19 @@ return_code cancel_movement(board game) {
 }
 
 return_code cancel_step(board game) {
-    if (game->picked_piece == NONE) return EMPTY;
+    if (game->picked_piece == NONE){
+        return EMPTY;
+    }
     
     if (game->history_index == 0) {
         return cancel_movement(game);
     }
-
+    
+    //on prend les informations du dernier mouvement
     game->history_index--;
     step_history last = game->history[game->history_index];
 
+    //on modifie les données de la pièce
     game->p_line = last.old_line;
     game->p_col = last.old_col;
     game->moves_remaining = last.moves_at_step;
