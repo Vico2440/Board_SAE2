@@ -225,7 +225,7 @@ bool is_move_possible(board game, direction direction) {
     //si c'est pas dans la grille -> false
     if (!is_inside(target_l, target_c)) return false;
 
-    // A FAIRE LE COMMENTAIRE
+    //si on doit rebondir alors on doit rebondir sur une case vide
     if (game->moves_remaining == 0 && game->grid[game->p_line][game->p_col] != NONE) {
         if (game->grid[target_l][target_c] != NONE) return false;
         return true;
