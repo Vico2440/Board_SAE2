@@ -236,7 +236,7 @@ return_code pick_piece(board game, player current_player, int line, int column) 
         return FORBIDDEN;     
     } 
     //si le joueur est NORD mais que la ligne n'est pas celle la plus au nord
-    if (line != northmost_occupied_line(game))
+    if (current_player == SOUTH_N && line != northmost_occupied_line(game))
     {
         return FORBIDDEN;
     }
