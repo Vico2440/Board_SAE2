@@ -3,12 +3,15 @@
 #include <string.h>
 #include "board.h"
 
+
+// Structure qui sauvegarde les coordonnées d'un pas  utile pour annulé un move 
 typedef struct {
     int old_line;
     int old_col;
     int moves_at_step;
 } step_history;
 
+//
 struct board_s {
     size grid[DIMENSION][DIMENSION];
 
